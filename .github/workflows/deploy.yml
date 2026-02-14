@@ -1,4 +1,4 @@
-name: Deploy to Azure - dev
+name: Deploy to Azure - production
 on:
   workflow_dispatch:
     inputs:
@@ -9,7 +9,7 @@ on:
       environment:
         description: 'Environment'
         required: true
-        default: 'dev'
+        default: 'production'
 
 env:
   AZURE_RESOURCE_ID: ${{ github.event.inputs.resource_id }}
