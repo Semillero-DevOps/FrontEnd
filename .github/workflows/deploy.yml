@@ -1,0 +1,23 @@
+name: Deploy to /subscriptions/ba8381f0-1448-45c2-82b2-a24f42014369/resourceGroups/rg_iop/providers/Microsoft.Web/sites/peribank-mobile (dev)
+on:
+  workflow_dispatch:
+    inputs:
+      resource_id:
+        description: 'Resource ID'
+        required: true
+        default: '/subscriptions/ba8381f0-1448-45c2-82b2-a24f42014369/resourceGroups/rg_iop/providers/Microsoft.Web/sites/peribank-mobile'
+      environment:
+        description: 'Environment'
+        required: true
+        default: 'dev'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to ${{ github.event.inputs.resource_id }}
+        run: |
+          echo "Deploying to resource: ${{ github.event.inputs.resource_id }}"
+          echo "Environment: ${{ github.event.inputs.environment }}"
+          # TODO: Implement deployment to ${{ github.event.inputs.resource_id }}
