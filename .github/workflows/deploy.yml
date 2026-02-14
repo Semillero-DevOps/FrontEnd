@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: Deploy to Azure
 
 on:
   workflow_dispatch:
@@ -9,57 +9,44 @@ on:
         default: 'production'
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: '18'
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '18'
 
-    - name: Install dependencies
-      run: npm install
+      - name: Install dependencies
+        run: npm install
 
-    - name: Run tests
-      run: npm test
+      - name: Run tests
+        run: npm test
 
-    - name: Build application
-      run: npm run build
+      - name: Build application
+        run: npm run build
 
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
+      - name: Deploy to Azure App Service
+        run: |
+          RESOURCE_ID="/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/rg_iop/providers/Microsoft.Web/sites/peribank-mobile"
+          az webapp deployment source config-zip \
+            --resource-group rg_iop \
+            --name peribank-mobile \
+            --src-path ./build.zip
 
-    - name: Login to Azure
-      uses: azure/login@v1
-      with:
-        creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-    - name: Deploy to Azure App Service
-      run: |
-        RESOURCE_GROUP="rg_iop"
-        APP_SERVICE_NAME="peribank-mobile"
-        ZIP_FILE="$(pwd)/app.zip"
-        npm run zip -- $ZIP_FILE
-        az webapp deployment source config-zip \
-          --resource-group $RESOURCE_GROUP \
-          --name $APP_SERVICE_NAME \
-          --src $ZIP_FILE
-
-    - name: Verify deployment
-      run: |
-        RESOURCE_GROUP="rg_iop"
-        APP_SERVICE_NAME="peribank-mobile"
-        az webapp show \
-          --resource-group $RESOURCE_GROUP \
-          --name $APP_SERVICE_NAME \
-          --query 'state' \
-          --output tsv
+      - name: Verify Deployment
+        run: |
+          az webapp show \
+            --resource-group rg_iop \
+            --name peribank-mobile \
+            --query "state" \
+            --output tsv
