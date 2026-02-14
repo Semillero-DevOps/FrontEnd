@@ -1,116 +1,53 @@
-name: Deploy to Azure - production
-on:
-  workflow_dispatch:
-    inputs:
-      resource_id:
-        description: 'Azure Resource ID'
-        required: true
-        default: '/subscriptions/ba8381f0-1448-45c2-82b2-a24f42014369/resourceGroups/rg_iop/providers/Microsoft.Web/sites/peribank-mobile'
-      environment:
-        description: 'Environment'
-        required: true
-        default: 'production'
+name: CI/CD Pipeline for PeriBANK
 
-env:
-  AZURE_RESOURCE_ID: ${{ github.event.inputs.resource_id }}
-  ENVIRONMENT: ${{ github.event.inputs.environment }}
-  # Note: These credentials should be added to your GitHub repository secrets
-  # Settings -> Secrets and variables -> Actions -> New repository secret
-  # AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Parse Azure Resource ID
-        id: parse
-        run: |
-          # Parse ARM resource ID
-          # Format: /subscriptions/{subId}/resourceGroups/{rg}/providers/{provider}/{type}/{name}
-          resource_type=$(echo "${{ env.AZURE_RESOURCE_ID }}" | grep -oP 'providers/[^/]+/\K[^/]+' || echo "unknown")
-          resource_name=$(echo "${{ env.AZURE_RESOURCE_ID }}" | grep -oP '/[^/]+$' | tr -d '/')
-          subscription_id=$(echo "${{ env.AZURE_RESOURCE_ID }}" | grep -oP 'subscriptions/\K[^/]+')
-          resource_group=$(echo "${{ env.AZURE_RESOURCE_ID }}" | grep -oP 'resourceGroups/\K[^/]+')
-          
-          echo "resource_type=${resource_type}" >> $GITHUB_OUTPUT
-          echo "resource_name=${resource_name}" >> $GITHUB_OUTPUT
-          echo "subscription_id=${subscription_id}" >> $GITHUB_OUTPUT
-          echo "resource_group=${resource_group}" >> $GITHUB_OUTPUT
-          
-          echo "Parsed Resource Type: ${resource_type}"
-          echo "Parsed Resource Name: ${resource_name}"
-          echo "Parsed Subscription: ${subscription_id}"
-          echo "Parsed Resource Group: ${resource_group}"
-      
-      - name: Setup Node.js
-        if: contains(steps.parse.outputs.resource_type, 'sites') # App Service
-        uses: actions/setup-node@v4
+        uses: actions/checkout@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
         with:
           node-version: '18'
-      
+
       - name: Install dependencies
-        if: contains(steps.parse.outputs.resource_type, 'sites')
         run: npm install
-        working-directory: ./
-      
+
+      - name: Run tests
+        run: npm test
+
       - name: Build application
-        if: contains(steps.parse.outputs.resource_type, 'sites')
         run: npm run build
-        working-directory: ./
-      
-      - name: Azure Login
+
+      - name: Login to Azure
         uses: azure/login@v1
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      
-      - name: Deploy to App Service
-        if: contains(steps.parse.outputs.resource_type, 'sites')
+          creds: ${{ secrets.AZURE_CREDENTIALS }$}
+
+      - name: Deploy to Azure App Service
         run: |
-          # Create deployment package
-          if [ -d "dist" ]; then
-            cd dist
-            zip -r ../app.zip .
-            cd ..
-          elif [ -d "build" ]; then
-            cd build
-            zip -r ../app.zip .
-            cd ..
-          else
-            zip -r app.zip . -x "node_modules/*" ".git/*" "*.git*"
-          fi
-          
-          # Deploy to App Service
           az webapp deployment source config-zip \
-            --resource-group ${{ steps.parse.outputs.resource_group }} \
-            --name ${{ steps.parse.outputs.resource_name }} \
-            --src app.zip
-      
-      - name: Deployment Summary
-        if: success()
+            --resource-group rg_iop \
+            --name peribank-mobile \
+            --src-path ./path/to/your/build.zip
+
+      - name: Post-deployment verification
         run: |
-          echo "===== DEPLOYMENT SUCCESSFUL ====="
-          echo "Resource: ${{ steps.parse.outputs.resource_name }}"
-          echo "Resource Group: ${{ steps.parse.outputs.resource_group }}"
-          echo "Environment: ${{ env.ENVIRONMENT }}"
-          echo "App URL: https://${{ steps.parse.outputs.resource_name }}.azurewebsites.net"
-          echo "================================="
-      
-      - name: Deployment Failed
-        if: failure()
-        run: |
-          echo "===== DEPLOYMENT FAILED ====="
-          echo "Resource: ${{ steps.parse.outputs.resource_name }}"
-          echo "Resource Group: ${{ steps.parse.outputs.resource_group }}"
-          echo ""
-          echo "Troubleshooting:"
-          echo "1. Verify AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID secrets exist"
-          echo "2. Check that Service Principal has Contributor role on App Service"
-          echo "3. Verify resource exists: az webapp show -g RG -n APP_NAME"
-          echo "4. Check App Service logs: https://portal.azure.com"
-          echo "================================"
-          exit 1
+          response=$(curl -s https://peribank-mobile.azurewebsites.net)
+          if [[ "$response" != *"Expected Content"* ]]; then
+            echo "Post-deployment verification failed."
+            exit 1
+          else
+            echo "Post-deployment verification succeeded."
+          fi
