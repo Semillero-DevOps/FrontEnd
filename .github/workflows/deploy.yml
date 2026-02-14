@@ -1,6 +1,54 @@
+name: CI/CD Pipeline
 
-{
-  "file_path": ".github/workflows/deploy.yml",
-  "content": "name: Deploy to Azure App Service\n\non:\n  workflow_dispatch:\n    inputs:\n      environment:\n        description: 'Environment'\n        required: true\n        default: 'production'\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n\n    steps:\n    - name: Checkout code\n      uses: actions/checkout@v2\n\n    - name: Set up Node.js\n      uses: actions/setup-node@v2\n      with:\n        node-version: '18'\n\n    - name: Install dependencies\n      run: npm install\n\n    - name: Run tests\n      run: npm test\n\n    - name: Build application\n      run: npm run build\n\n    - name: Login to Azure\n      uses: azure/login@v1\n      with:\n        creds: $\{\{ secrets.AZURE_CREDENTIALS }}\n\n    - name: Deploy to Azure App Service\n      run: |\n        RESOURCE_ID=\"/subscriptions/$\{\{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/rg_iop/providers/Microsoft.Web/sites/peribank-mobile\"\n        RESOURCE_GROUP=$(echo $RESOURCE_ID | cut -d '/' -f5)\n        APP_NAME=$(echo $RESOURCE_ID | cut -d '/' -f9)\n        az webapp deployment source config-zip --resource-group $RESOURCE_GROUP --name $APP_NAME --src-path ./build.zip\n\n    - name: Verify deployment\n      run: |\n        curl -I https://$\{\{ inputs.environment }}.peribank-mobile.azurewebsites.net\n\n",
-  "metadata": {}
-}
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment'
+        required: true
+        default: 'production'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Run tests
+      run: npm test
+
+    - name: Build application
+      run: npm run build
+
+    - name: Login to Azure
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+
+    - name: Deploy to Azure App Service
+      env:
+        AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      run: |
+        RESOURCE_GROUP=rg_iop
+        APP_NAME=peribank-mobile
+        ZIP_FILE=app.zip
+        az webapp deployment source config-zip \
+          --resource-group $RESOURCE_GROUP \
+          --name $APP_NAME \
+          --src $ZIP_FILE
+
+    - name: Verify Deployment
+      run: |
+        az webapp show --resource-group rg_iop --name peribank-mobile --query state
