@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: CI/CD Pipeline for PeriBANK
 
 on:
   workflow_dispatch:
@@ -9,15 +9,15 @@ on:
         default: 'production'
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
 
     - name: Set up Node.js
-      uses: actions/setup-node@v2
+      uses: actions/setup-node@v3
       with:
         node-version: '18'
 
@@ -30,23 +30,24 @@ jobs:
     - name: Build application
       run: npm run build
 
-    - name: Login to Azure
+    - name: Authenticate with Azure
       uses: azure/login@v1
       with:
-        client-id: ${{ secrets.AZURE_CLIENT_ID }}
-        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
 
     - name: Deploy to Azure App Service
+      env:
+        AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        AZURE_RESOURCE_GROUP: rg_iop
+        AZURE_APP_NAME: peribank-mobile
       run: |
-        WEBAPP_NAME=peribank-mobile
-        RESOURCE_GROUP=rg_iop
-        ZIP_FILE=build.zip
-        zip -r $ZIP_FILE .
-        az webapp deployment source config-zip -g $RESOURCE_GROUP -n $WEBAPP_NAME --src $ZIP_FILE
+        zip -r build.zip .
+        az webapp deployment source config-zip \
+          --subscription $AZURE_SUBSCRIPTION_ID \
+          --resource-group $AZURE_RESOURCE_GROUP \
+          --name $AZURE_APP_NAME \
+          --src build.zip
 
-    - name: Post-deployment verification
+    - name: Verify deployment
       run: |
-        echo "Checking deployment..."
-        az webapp show --name peribank-mobile --resource-group rg_iop | jq '.state'
+        curl -f https://peribank-mobile.azurewebsites.net || exit 1
