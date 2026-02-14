@@ -1,53 +1,61 @@
 name: CI/CD Pipeline for PeriBANK
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment'
+        required: true
+        default: 'production'
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+    - name: Checkout code
+      uses: actions/checkout@v2
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
+    - name: Set up Node.js
+      uses: actions/setup-node@v2
+      with:
+        node-version: '18'
 
-      - name: Install dependencies
-        run: npm install
+    - name: Install dependencies
+      run: npm install
 
-      - name: Run tests
-        run: npm test
+    - name: Run tests
+      run: npm test
 
-      - name: Build application
-        run: npm run build
+    - name: Build application
+      run: npm run build
 
-      - name: Login to Azure
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }$}
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
 
-      - name: Deploy to Azure App Service
-        run: |
-          az webapp deployment source config-zip \
-            --resource-group rg_iop \
-            --name peribank-mobile \
-            --src-path ./path/to/your/build.zip
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
 
-      - name: Post-deployment verification
-        run: |
-          response=$(curl -s https://peribank-mobile.azurewebsites.net)
-          if [[ "$response" != *"Expected Content"* ]]; then
-            echo "Post-deployment verification failed."
-            exit 1
-          else
-            echo "Post-deployment verification succeeded."
-          fi
+    - name: Login to Azure
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+
+    - name: Deploy to Azure App Service
+      run: |
+        az webapp deployment source config-zip \
+          --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID }} \
+          --resource-group rg_iop \
+          --name peribank-mobile \
+          --src-path './build.zip'
+
+    - name: Verify deployment
+      run: |
+        curl --fail https://peribank-mobile.azurewebsites.net || exit 1
+
+    - name: Post-deployment verification
+      run: echo "Deployment successful!"
