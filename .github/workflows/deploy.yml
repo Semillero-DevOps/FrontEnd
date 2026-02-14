@@ -13,22 +13,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Code
+    - name: Checkout code
       uses: actions/checkout@v2
 
     - name: Set up Node.js
-      uses: actions/setup-node@v2
+      uses: actions/setup-node@v3
       with:
         node-version: '18'
 
-    - name: Install Dependencies
+    - name: Install dependencies
       run: npm install
 
-    - name: Run Tests
+    - name: Run tests
       run: npm test
 
-    - name: Build Application
+    - name: Build project
       run: npm run build
+
+    - name: Archive production artifacts
+      run: zip -r build.zip build/
 
     - name: Authenticate with Azure
       uses: azure/login@v1
@@ -39,21 +42,15 @@ jobs:
 
     - name: Deploy to Azure App Service
       run: |
-        RESOURCE_GROUP="rg_iop"
-        APP_NAME="peribank-mobile"
-        ZIP_FILE="app.zip"
-
-        # Creating the zip file
-        zip -r $ZIP_FILE .
-
-        # Deploying
+        az account set --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         az webapp deployment source config-zip \
-          --resource-group $RESOURCE_GROUP \
-          --name $APP_NAME \
-          --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID }} \
-          --src $ZIP_FILE
+          --resource-group rg_iop \
+          --name peribank-mobile \
+          --src build.zip
 
-    - name: Post-Deployment Verification
+    - name: Verify deployment
       run: |
-        az webapp show --name peribank-mobile --resource-group rg_iop --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        curl -f https://${{ secrets.AZURE_SUBSCRIPTION_ID }}.azurewebsites.net || exit 1
+        az webapp show \
+          --resource-group rg_iop \
+          --name peribank-mobile \
+          --query 'state' -o tsv
