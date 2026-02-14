@@ -1,4 +1,4 @@
-name: CI/CD Pipeline for PeriBANK
+name: CI/CD Pipeline
 
 on:
   workflow_dispatch:
@@ -13,41 +13,47 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+    - name: Checkout Code
+      uses: actions/checkout@v2
 
     - name: Set up Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v2
       with:
         node-version: '18'
 
-    - name: Install dependencies
+    - name: Install Dependencies
       run: npm install
 
-    - name: Run tests
+    - name: Run Tests
       run: npm test
 
-    - name: Build application
+    - name: Build Application
       run: npm run build
 
     - name: Authenticate with Azure
       uses: azure/login@v1
       with:
-        creds: ${{ secrets.AZURE_CREDENTIALS }}
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
 
     - name: Deploy to Azure App Service
-      env:
-        AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        AZURE_RESOURCE_GROUP: rg_iop
-        AZURE_APP_NAME: peribank-mobile
       run: |
-        zip -r build.zip .
-        az webapp deployment source config-zip \
-          --subscription $AZURE_SUBSCRIPTION_ID \
-          --resource-group $AZURE_RESOURCE_GROUP \
-          --name $AZURE_APP_NAME \
-          --src build.zip
+        RESOURCE_GROUP="rg_iop"
+        APP_NAME="peribank-mobile"
+        ZIP_FILE="app.zip"
 
-    - name: Verify deployment
+        # Creating the zip file
+        zip -r $ZIP_FILE .
+
+        # Deploying
+        az webapp deployment source config-zip \
+          --resource-group $RESOURCE_GROUP \
+          --name $APP_NAME \
+          --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID }} \
+          --src $ZIP_FILE
+
+    - name: Post-Deployment Verification
       run: |
-        curl -f https://peribank-mobile.azurewebsites.net || exit 1
+        az webapp show --name peribank-mobile --resource-group rg_iop --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        curl -f https://${{ secrets.AZURE_SUBSCRIPTION_ID }}.azurewebsites.net || exit 1
