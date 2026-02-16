@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: CI/CD Pipeline for PeriBANK
 
 on:
   workflow_dispatch:
@@ -9,51 +9,50 @@ on:
         default: 'production'
 
 jobs:
-  build_and_deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+    - name: Checkout code
+      uses: actions/checkout@v2
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
 
-      - name: Install dependencies
-        run: npm install
+    - name: Install dependencies
+      run: npm install
 
-      - name: Run tests
-        run: npm test
+    - name: Run tests
+      run: npm test
 
-      - name: Build application
-        run: npm run build
+    - name: Build application
+      run: npm run build
 
-      - name: Azure Login
-        uses: azure/login@v1
-        with:
-          creds: $
-          {{ secrets.AZURE_CREDENTIALS }}
+    - name: Login to Azure
+      uses: azure/login@v1
+      with:
+        creds: |
+          {
+            "clientId": "${{ secrets.AZURE_CLIENT_ID }}",
+            "clientSecret": "${{ secrets.AZURE_CLIENT_SECRET }}",
+            "tenantId": "${{ secrets.AZURE_TENANT_ID }}",
+            "subscriptionId": "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          }
 
-      - name: Deploy to Azure Web App
-        env:
-          AZURE_CLIENT_ID: $
-          {{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: $
-          {{ secrets.AZURE_CLIENT_SECRET }}
-          AZURE_TENANT_ID: $
-          {{ secrets.AZURE_TENANT_ID }}
-          AZURE_SUBSCRIPTION_ID: $
-          {{ secrets.AZURE_SUBSCRIPTION_ID }}
-        run: |
-          az webapp deployment source config-zip \
-            --resource-group rg_helpia_webapp \
-            --name helpia \
-            --src-path ./build.zip
+    - name: Deploy to Azure App Service
+      env:
+        AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      run: |
+        az webapp deployment source config-zip \
+          --name peribank-mobile \
+          --resource-group rg_iop \
+          --src-path ./build.zip
 
-      - name: Verify Deployment
-        run: |
-          az webapp show \
-            --resource-group rg_helpia_webapp \
-            --name helpia \
-            --query state
+    - name: Verify deployment
+      run: |
+        curl https://peribank-mobile.azurewebsites.net/health || exit 1
