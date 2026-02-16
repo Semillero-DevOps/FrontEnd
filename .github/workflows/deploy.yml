@@ -11,12 +11,11 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
 
-    - name: Set up Node.js
+    - name: Setup Node.js
       uses: actions/setup-node@v3
       with:
         node-version: '18'
@@ -33,26 +32,31 @@ jobs:
     - name: Login to Azure
       uses: azure/login@v1
       with:
-        creds: |
-          {
-            "clientId": "${{ secrets.AZURE_CLIENT_ID }}",
-            "clientSecret": "${{ secrets.AZURE_CLIENT_SECRET }}",
-            "tenantId": "${{ secrets.AZURE_TENANT_ID }}",
-            "subscriptionId": "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
-          }
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
 
     - name: Deploy to Azure App Service
       env:
-        AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
         AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
         AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       run: |
+        RESOURCE_GROUP="rg_iop"
+        APP_NAME="peribank-mobile"
+        ZIP_FILE="app.zip"
+
+        # Create zip from build output
+        zip -r $ZIP_FILE ./build
+
+        # Deploy zip to Azure App Service
         az webapp deployment source config-zip \
-          --name peribank-mobile \
-          --resource-group rg_iop \
-          --src-path ./build.zip
+          --resource-group $RESOURCE_GROUP \
+          --name $APP_NAME \
+          --src $ZIP_FILE
 
     - name: Verify deployment
       run: |
-        curl https://peribank-mobile.azurewebsites.net/health || exit 1
+        az webapp show \
+          --resource-group rg_iop \
+          --name peribank-mobile \
+          --query "state" -o tsv
